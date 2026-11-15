@@ -17,4 +17,4 @@ def text(g):
         return s + "🤝 تعادل! الحب فاز ❤️"
 
     winner = "أبو مِيلاف" if g["status"] == "X" else "أم مِيلاف"
-    return s + f"🏆 الفائزة/الفائز: {winner} ❤️"
+    return s + f"🏆 الفائز: {winner} ❤️"
