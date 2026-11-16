@@ -8,10 +8,6 @@ from telegram.ext import (
 
 TOKEN = os.getenv("BOT_TOKEN")
 
-# ضع أرقام حسابات أبو مِيلاف وأم مِيلاف هنا أو عبر متغيرات البيئة في Railway
-FATHER_ID = int(os.getenv("FATHER_ID", "0"))
-MOTHER_ID = int(os.getenv("MOTHER_ID", "0"))
-
 DB = "xo_stats.db"
 games = {}
 
@@ -114,33 +110,19 @@ async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("استخدم الأمر داخل المجموعة.")
         return
 
-    if MOTHER_ID == 0 or FATHER_ID == 0:
-        await update.message.reply_text(
-            "⚙️ يجب إعداد رقم حساب أبو مِيلاف وأم مِيلاف أولاً في المتغيرات."
-        )
-        return
-
-    if user.id != MOTHER_ID and user.id != FATHER_ID:
-        await update.message.reply_text(
-            "هذه اللعبة خاصة بأبو مِيلاف وأم مِيلاف ❤️"
-        )
-        return
-
     old = games.get(chat.id)
     if old and old["status"] in ("waiting", "playing"):
         await update.message.reply_text("هناك مباراة جارية!")
         return
 
     g = {
-        "x": None,
+        "x": user,
         "o": None,
         "board": [""] * 9,
         "turn": "X",
         "status": "waiting"
     }
 
-    # إذا كان المستخدم هو الأب يبدأ بـ X، وإذا حاول غيره (الأم مثلاً تبدأ اللعبة) يمكن ضبطها
-    g["x"] = user
     games[chat.id] = g
 
     await update.message.reply_text(
@@ -218,13 +200,6 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer("المباراة بدأت بالفعل!", show_alert=True)
             return
 
-        if user.id != MOTHER_ID:
-            await q.answer(
-                "عذراً، هذا المقعد مخصص لأم مِيلاف ❤️",
-                show_alert=True
-            )
-            return
-
         if g["x"] and user.id == g["x"].id:
             await q.answer("لا يمكنك اللعب ضد نفسك!", show_alert=True)
             return
@@ -232,7 +207,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         g["o"] = user
         g["status"] = "playing"
 
-        await q.answer("أهلاً بأم مِيلاف ❤️")
+        await q.answer("تم انضمام اللاعب الثاني ❤️")
         await q.edit_message_text(
             game_text(g),
             reply_markup=keyboard(chat_id, g["board"])
@@ -309,9 +284,6 @@ def main():
     if not TOKEN:
         raise RuntimeError("BOT_TOKEN غير موجود!")
 
-    if MOTHER_ID == 0 or FATHER_ID == 0:
-        raise RuntimeError("يجب ضبط FATHER_ID و MOTHER_ID في المتغيرات!")
-
     db().close()
 
     app = Application.builder().token(TOKEN).build()
@@ -323,7 +295,7 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CallbackQueryHandler(buttons))
 
-    print("XO ARENA - Abu & Um Milaf")
+    print("XO ARENA - Running without IDs restriction")
     app.run_polling()
 
 
