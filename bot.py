@@ -9,54 +9,63 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# تخزين حالة اللعبة لكل محادثة (اللوحة، اللاعبين، ومن الدور عليه)
+# تخزين حالات الألعاب النشطة
 games_state = {}
 
-def get_board_keyboard(board):
-    """إنشاء أزرار تفاعلية أنيقة وكبيرة للوحة XO"""
+def get_fancy_board(board, player_x_name, player_o_name, turn):
+    """إنشاء لوحة تفاعلية بتصميم أنيق وفخم جداً"""
     keyboard = []
     for r in range(3):
         row = []
         for c in range(3):
             cell = board[r][c]
             if cell == "X":
-                text = "❌ أبو مِيلاف"
+                text = "❌ ( أبو مِيلاف )"
             elif cell == "O":
-                text = "⭕ أم مِيلاف"
+                text = "⭕ ( أم مِيلاف )"
             else:
-                text = "⬛ ··· فارغ ···"
+                text = "⬛ 🞲 فارغ 🞲"
             
-            row.append(InlineKeyboardButton(text, callback_data=f"play_{r}_{c}"))
+            row.append(InlineKeyboardButton(text, callback_data=f"cell_{r}_{c}"))
         keyboard.append(row)
     
-    keyboard.append([InlineKeyboardButton("🔄 إعادة تشغيل ساحة التحدي", callback_data="reset_game")])
+    # أزرار تحكم إضافية بتصميم راقي
+    keyboard.append([InlineKeyboardButton("🔄 إعادة تشغيل المعركة", callback_data="action_reset")])
     return InlineKeyboardMarkup(keyboard)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بدء لعبة جديدة ثنائية بين أبو مِيلاف وأم مِيلاف"""
+    """بدء اللوحة ودعوة الصديق للانضمام"""
     chat_id = update.effective_chat.id
+    user = update.effective_user
     
-    # تهيئة اللوحة فارغة، وتحديد أن اللاعب الأول هو أبو مِيلاف (X)
     games_state[chat_id] = {
         "board": [[" " for _ in range(3)] for _ in range(3)],
-        "turn": "X",  # X يمثل أبو مِيلاف، O يمثل أم مِيلاف
-        "player_x": None,
-        "player_o": None
+        "turn": "X",
+        "player_x": {"id": user.id, "name": user.first_name},
+        "player_o": None,
+        "status": "waiting_for_opponent"
     }
     
-    welcome_text = (
-        "🔥 **معركة ساحة التحدي | XO Arena** 🔥\n\n"
-        "🎮 اللاعب الأول: **أبو مِيلاف** (❌)\n"
-        "🎮 اللاعب الثاني: **أم مِيلاف** (⭕)\n\n"
-        "⚡ الدور الحالي لـ: **أبو مِيلاف (❌)**\n"
-        "اضغط على أي مربع أدناه للبدء باللعب!"
+    game = games_state[chat_id]
+    
+    text = (
+        "╔═══════════════════════╗\n"
+        "     🔥 **XO ARENA - ساحة التحدي** 🔥     \n"
+        "╚═══════════════════════╝\n\n"
+        f"👑 **اللاعب الأول (X):** {game['player_x']['name']} (أبو مِيلاف)\n"
+        "⏳ **اللاعب الثاني (O):** في انتظار انضمام الخصم...\n\n"
+        "👇 **اضغط على الزر أدناه لتدخل كـ (أم مِيلاف) وتلعب مع صديقك مباشرة!**"
     )
     
-    keyboard = get_board_keyboard(games_state[chat_id]["board"])
-    await update.message.reply_text(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
+    keyboard = [
+        [InlineKeyboardButton("🎮 انضم الآن كـ (أم مِيلاف ⭕)", callback_data="action_join")],
+        [InlineKeyboardButton("🔄 بدء جلسة جديدة", callback_data="action_reset")]
+    ]
+    
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """التعامل مع ضغطات الأزرار والتبديل بين اللاعبين"""
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إدارة تفاعل الأزرار بالكامل بين اللاعبين"""
     query = update.callback_query
     await query.answer()
     
@@ -65,69 +74,114 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     
     if chat_id not in games_state:
+        # إذا لم تكن اللعبة مسجلة، نقوم بتهئيتها تلقائياً
         games_state[chat_id] = {
             "board": [[" " for _ in range(3)] for _ in range(3)],
             "turn": "X",
-            "player_x": None,
-            "player_o": None
+            "player_x": {"id": user.id, "name": user.first_name},
+            "player_o": None,
+            "status": "playing"
         }
     
     game = games_state[chat_id]
-    board = game["board"]
     
-    if data == "reset_game":
-        game["board"] = [[" " for _ in range(3)] for _ in range(3)]
-        game["turn"] = "X"
-        game["player_x"] = None
-        game["player_o"] = None
-        
-        text = (
-            "🔄 **تم إعادة تعيين ساحة التحدي!**\n\n"
-            "🎮 اللاعب الأول: **أبو مِيلاف** (❌)\n"
-            "🎮 اللاعب الثاني: **أم مِيلاف** (⭕)\n\n"
-            "⚡ الدور الحالي لـ: **أبو مِيلاف (❌)**"
-        )
-        await query.edit_message_text(text=text, reply_markup=get_board_keyboard(board), parse_mode="Markdown")
+    # 1. زر الانضمام كلاعب ثانٍ
+    if data == "action_join":
+        if game["player_o"] is None:
+            if user.id == game["player_x"]["id"]:
+                await query.answer("⚠️ لا يمكنك اللعب ضد نفسك يا بطل! اعطِ الرابط لصديقك لينضم.", show_alert=True)
+                return
+            game["player_o"] = {"id": user.id, "name": user.first_name}
+            game["status"] = "playing"
+            
+            text = (
+                "╔═══════════════════════╗\n"
+                "     🔥 **معركة XO ARENA بدأت!** 🔥     \n"
+                "╚═══════════════════════╝\n\n"
+                f"❌ **أبو مِيلاف:** {game['player_x']['name']}\n"
+                f"⭕ **أم مِيلاف:** {game['player_o']['name']}\n\n"
+                "⚡ **الدور الحالي لـ:** أبو مِيلاف (❌)"
+            )
+            keyboard = get_fancy_board(game["board"], game["player_x"]["name"], game["player_o"]["name"], game["turn"])
+            await query.edit_message_text(text=text, reply_markup=keyboard, parse_mode="Markdown")
+        else:
+            await query.answer(f"✅ المقعد محجوز مسبقاً لـ {game['player_o']['name']}", show_alert=True)
         return
 
-    if data.startswith("play_"):
+    # 2. زر إعادة التعيين
+    if data == "action_reset":
+        game["board"] = [[" " for _ in range(3)] for _ in range(3)]
+        game["turn"] = "X"
+        game["player_x"] = {"id": user.id, "name": user.first_name}
+        game["player_o"] = None
+        game["status"] = "waiting_for_opponent"
+        
+        text = (
+            "╔═══════════════════════╗\n"
+            "     🔄 **تم إعادة تعيين الساحة** 🔄     \n"
+            "╚═══════════════════════╝\n\n"
+            f"👑 **اللاعب الأول (X):** {game['player_x']['name']} (أبو مِيلاف)\n"
+            "⏳ **اللاعب الثاني (O):** في انتظار انضمام الخصم...\n\n"
+            "👇 **اضغط على الزر أدناه للانضمام!**"
+        )
+        keyboard = [
+            [InlineKeyboardButton("🎮 انضم الآن كـ (أم مِيلاف ⭕)", callback_data="action_join")],
+            [InlineKeyboardButton("🔄 بدء جلسة جديدة", callback_data="action_reset")]
+        ]
+        await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        return
+
+    # 3. مربعات اللعب داخل الشبكة
+    if data.startswith("cell_"):
+        if game["status"] == "waiting_for_opponent":
+            await query.answer("⏳ يجب أن ينضم صديقك أولاً كـ (أم مِيلاف) لتبدأ المعركة!", show_alert=True)
+            return
+            
+        # التحقق من دور اللاعب الصحيح
+        is_x_player = game["player_x"] and user.id == game["player_x"]["id"]
+        is_o_player = game["player_o"] and user.id == game["player_o"]["id"]
+        
+        if not is_x_player and not is_o_player:
+            # إذا دخل شخص ثالث متفرج
+            await query.answer("👀 أنت متفرج في هذه المعركة، انتظر انتهاء الجولة أو ابدأ لعبتك الخاصة بـ /start!", show_alert=True)
+            return
+            
+        if game["turn"] == "X" and not is_x_player:
+            await query.answer("⏳ ليس دورك الآن، انتظر دور (أبو مِيلاف)!", show_alert=True)
+            return
+            
+        if game["turn"] == "O" and not is_o_player:
+            await query.answer("⏳ ليس دورك الآن، انتظر دور (أم مِيلاف)!", show_alert=True)
+            return
+
         _, r, c = data.split("_")
         r, c = int(r), int(c)
+        board = game["board"]
         
-        # تسجيل اللاعبين تلقائياً عند أول ضغطة
-        if game["turn"] == "X":
-            if not game["player_x"]:
-                game["player_x"] = user.id
-        else:
-            if not game["player_o"]:
-                game["player_o"] = user.id
-
-        # التحقق إن كان المربع فارغاً
         if board[r][c] == " ":
             board[r][c] = game["turn"]
             
-            # تبديل الدور بين أبو مِيلاف وأم مِيلاف
+            # تبديل الدور
             if game["turn"] == "X":
                 game["turn"] = "O"
-                current_name = "أم مِيلاف (⭕)"
+                next_name = f"{game['player_o']['name']} (أم مِيلاف ⭕)"
             else:
                 game["turn"] = "X"
-                current_name = "أبو مِيلاف (❌)"
-            
-            status_text = (
-                "⚔️ **مستمرة المعركة في XO Arena** ⚔️\n\n"
-                "🎮 اللاعب الأول: **أبو مِيلاف** (❌)\n"
-                "🎮 اللاعب الثاني: **أم مِيلاف** (⭕)\n\n"
-                f"⚡ الدور الحالي لـ: **{current_name}**"
+                next_name = f"{game['player_x']['name']} (أبو مِيلاف ❌)"
+                
+            text = (
+                "╔═══════════════════════╗\n"
+                "     ⚔️ **معركة XO ARENA جارية** ⚔️     \n"
+                "╚═══════════════════════╝\n\n"
+                f"❌ **أبو مِيلاف:** {game['player_x']['name']}\n"
+                f"⭕ **أم مِيلاف:** {game['player_o']['name']}\n\n"
+                f"⚡ **دور اللاعب:** {next_name}"
             )
             
-            await query.edit_message_text(
-                text=status_text,
-                reply_markup=get_board_keyboard(board),
-                parse_mode="Markdown"
-            )
+            keyboard = get_fancy_board(board, game['player_x']['name'], game['player_o']['name'], game["turn"])
+            await query.edit_message_text(text=text, reply_markup=keyboard, parse_mode="Markdown")
         else:
-            await query.answer("⚠️ هذا المربع محجوز مسبقاً يا بطل، اختر مربعاً آخر!", show_alert=True)
+            await query.answer("⚠️ هذا المربع محجوز مسبقاً يا بطل، اختر غيره!", show_alert=True)
 
 def main():
     TOKEN = os.getenv("BOT_TOKEN")
@@ -138,9 +192,9 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_click))
+    app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("XO ARENA - Multiplayer Mode Running...")
+    print("XO ARENA - Pro Multiplayer Mode Running...")
     app.run_polling()
 
 if __name__ == '__main__':
