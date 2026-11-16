@@ -11,8 +11,8 @@ TOKEN = os.getenv("BOT_TOKEN")
 DB = "xo_stats.db"
 games = {}
 
-PLAYER_X = "أبو مِيلاف"
-PLAYER_O = "أم مِيلاف"
+PLAYER_X = "اللاعب الأول (X)"
+PLAYER_O = "اللاعب الثاني (O)"
 
 
 # DATABASE
@@ -74,8 +74,8 @@ def game_text(g):
     s = (
         "💕 XO ARENA 💕\n"
         "━━━━━━━━━━━━\n"
-        "❌ X: أبو مِيلاف\n"
-        "⭕ O: أم مِيلاف\n\n"
+        "❌ X: اللاعب الأول\n"
+        "⭕ O: اللاعب الثاني\n\n"
     )
 
     if not g["o"]:
@@ -86,7 +86,7 @@ def game_text(g):
         return s + f"🎮 الدور الآن: {p}"
 
     if g["status"] == "draw":
-        return s + "🤝 تعادل! الحب فاز ❤️"
+        return s + "🤝 تعادل! انتهت اللعبة ❤️"
 
     winner = PLAYER_X if g["status"] == "X" else PLAYER_O
     return s + f"🏆 الفائز: {winner} ❤️"
@@ -96,9 +96,9 @@ def game_text(g):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "💕 أهلاً بكم في XO ARENA 💕\n"
-        "اللعبة الخاصة بأبو مِيلاف وأم مِيلاف.\n\n"
-        "استخدموا الأمر /newgame للبدء في الخاص أو في أي مجموعة."
+        "💕 أهلاً بك في ساحة التحدي XO ARENA 💕\n"
+        "اللعبة مخصصة للعب الثنائي في الخاص أو المجموعات.\n\n"
+        "استخدم الأمر /newgame للبدء."
     )
 
 
@@ -106,7 +106,6 @@ async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
 
-    # السماح باللعب في الخاص أو المجموعات
     if chat.type not in ("private", "group", "supergroup"):
         await update.message.reply_text("استخدم الأمر في الخاص أو داخل المجموعة.")
         return
@@ -171,7 +170,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ).fetchall()
     con.close()
 
-    msg = "🏆 ترتيب أبطال الحب\n━━━━━━━━━━━━\n"
+    msg = "🏆 ترتيب أبطال اللعبة\n━━━━━━━━━━━━\n"
     medals = ["🥇", "🥈", "🥉"]
 
     for i, (name, wins, total) in enumerate(rows):
@@ -208,7 +207,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         g["o"] = user
         g["status"] = "playing"
 
-        await q.answer("تم انضمام اللاعب بنجاح ❤️")
+        await q.answer("تم انضمام اللاعب الثاني بنجاح ❤️")
         await q.edit_message_text(
             game_text(g),
             reply_markup=keyboard(chat_id, g["board"])
@@ -222,7 +221,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current = g["x"] if g["turn"] == "X" else g["o"]
 
     if not current or user.id != current.id:
-        await q.answer("ليس دورك الآن ❤️", show_alert=True)
+        await q.answer("ليس دورك الآن!", show_alert=True)
         return
 
     index = int(data[2])
@@ -296,7 +295,7 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CallbackQueryHandler(buttons))
 
-    print("XO ARENA - Private & Group Supported")
+    print("XO ARENA - Running safely")
     app.run_polling()
 
 
