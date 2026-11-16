@@ -6,7 +6,7 @@ from uuid import uuid4
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# تخزين حالات الألعاب النشطة للإنلاين لضمان سرعة الاستجابة والدقة
+# تخزين حالات الألعاب والنتائج بدقة لكل رسالة إنلاين
 inline_games = {}
 
 def check_winner(board):
@@ -24,23 +24,45 @@ def check_winner(board):
     return None
 
 def get_fancy_board(board):
-    """تصميم فخم، عريض، وواضحة جداً للعين"""
+    """تصميم مربعات نظيفة وفارغة وأنيقة تماماً"""
     keyboard = []
     for r in range(3):
         row = []
         for c in range(3):
             cell = board[r][c]
             if cell == "X":
-                text = "❌ [ أبو مِيلاف ]"
+                text = "❌ أبو مِيلاف"
             elif cell == "O":
-                text = "⭕ [ أم مِيلاف ]"
+                text = "⭕ أم مِيلاف"
             else:
-                text = "⬛ [ فارغ ] ⬛"
+                text = "⬜"  # مربع فارغ ونظيف بالكامل
             row.append(InlineKeyboardButton(text, callback_data=f"cell_{r}_{c}"))
         keyboard.append(row)
     
     keyboard.append([InlineKeyboardButton("🔄 ── إعادة ضبط المعركة ── 🔄", callback_data="action_reset")])
     return InlineKeyboardMarkup(keyboard)
+
+def get_game_text(scores, turn_name, status_msg=""):
+    """توليد النص الاحترافي مع عداد النقاط المحدث"""
+    x_score = scores["X"]
+    o_score = scores["O"]
+    ties = scores["ties"]
+    
+    text = (
+        "⚔️ **معركة XO ARENA الكبرى** ⚔️\n\n"
+        "📊 **[ لوحة عداد النقاط ]**\n"
+        f"❌ أبو مِيلاف: `{x_score}` نقاط\n"
+        f"⭕ أم مِيلاف: `{o_score}` نقاط\n"
+        f"🤝 التعادل: `{ties}`\n\n"
+    )
+    
+    if status_msg:
+        text += f"{status_msg}\n\n"
+    else:
+        current_name = "أبو مِيلاف (❌)" if turn_name == "X" else "أم مِيلاف (⭕)"
+        text += f"⚡ **الدور الحالي:** {current_name}\n"
+        
+    return text
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -57,24 +79,19 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     game_id = str(uuid4())
     board = [[" " for _ in range(3)] for _ in range(3)]
     
-    # حفظ حالة اللعبة في الذاكرة لتتبعها بدقة
     inline_games[game_id] = {
         "board": board,
-        "turn": "X"
+        "turn": "X",
+        "scores": {"X": 0, "O": 0, "ties": 0}
     }
     
-    text = (
-        "⚔️ **معركة XO ARENA الكبرى** ⚔️\n\n"
-        "🏆 اللاعب الأول: أبو مِيلاف (❌)\n"
-        "🏆 اللاعب الثاني: أم مِيلاف (⭕)\n\n"
-        "⚡ **الدور الحالي:** أبو مِيلاف (❌)"
-    )
+    text = get_game_text(inline_games[game_id]["scores"], "X")
     
     results = [
         InlineQueryResultArticle(
             id=game_id,
-            title="🎮 ابدأ معركة XO Arena المحدثة",
-            description="اضغط هنا لإرسال لوحة اللعب الفخمة والجديدة مع صديقك",
+            title="🎮 ابدأ معركة XO Arena بتصميم نظيف",
+            description="اضغط هنا لإرسال اللعبة بمربعات فارغة وأنيقة مع عداد النقاط",
             input_message_content=InputTextMessageContent(
                 message_text=text,
                 parse_mode="Markdown"
@@ -91,30 +108,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     inline_message_id = query.inline_message_id
     
-    if not inline_message_id:
-        # إذا كانت اللعبة مرسلة بطريقة عادية
+    if not inline_message_id or inline_message_id not in inline_games:
         return
-
-    # البحث عن حالة اللعبة أو تهيئتها إن لم تكن مخزنة
-    if inline_message_id not in inline_games:
-        inline_games[inline_message_id] = {
-            "board": [[" " for _ in range(3)] for _ in range(3)],
-            "turn": "X"
-        }
     
     game = inline_games[inline_message_id]
     board = game["board"]
     current_turn = game["turn"]
+    scores = game["scores"]
 
     if data == "action_reset":
         game["board"] = [[" " for _ in range(3)] for _ in range(3)]
         game["turn"] = "X"
-        text = (
-            "🔄 **بدأت جولة جديدة!**\n\n"
-            "🏆 اللاعب الأول: أبو مِيلاف (❌)\n"
-            "🏆 اللاعب الثاني: أم مِيلاف (⭕)\n\n"
-            "⚡ **الدور الحالي:** أبو مِيلاف (❌)"
-        )
+        text = get_game_text(scores, "X", "🔄 **بدأت جولة جديدة! التحدي مستمر**")
         await context.bot.edit_message_text(
             inline_message_id=inline_message_id,
             text=text,
@@ -133,23 +138,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if winner:
                 if winner == "X":
-                    msg = "🎉 **فاز في الجولة: أبو مِيلاف (❌)!** 🏆"
+                    scores["X"] += 1
+                    status_msg = "🎉 **فاز في هذه الجولة: أبو مِيلاف (❌)!** 🏆"
                 elif winner == "O":
-                    msg = "🎉 **فاز في الجولة: أم مِيلاف (⭕)!** 🏆"
+                    scores["O"] += 1
+                    status_msg = "🎉 **فاز في هذه الجولة: أم مِيلاف (⭕)!** 🏆"
                 else:
-                    msg = "🤝 **تعادلت المعركة! لا يوجد فائز.**"
+                    scores["ties"] += 1
+                    status_msg = "🤝 **تعادلت المعركة! لا يوجد فائز.**"
                 
-                text = f"🏁 **انتهت الجولة!**\n\n{msg}\n\n👇 اضغط على زر إعادة الضبط لجولة جديدة."
+                # مسح اللوحة تلقائياً بعد الفوز للبدء من جديد مع الاحتفاظ بالنقاط
+                game["board"] = [[" " for _ in range(3)] for _ in range(3)]
+                game["turn"] = "X"
+                text = get_game_text(scores, "X", f"{status_msg}\n👇 اضغط على المربعات للجولة التالية!")
             else:
                 # تبديل الدور
                 game["turn"] = "O" if current_turn == "X" else "X"
-                next_name = "أم مِيلاف (⭕)" if game["turn"] == "O" else "أبو مِيلاف (❌)"
-                text = (
-                    "⚔️ **معركة XO ARENA جارية** ⚔️\n\n"
-                    "🏆 اللاعب الأول: أبو مِيلاف (❌)\n"
-                    "🏆 اللاعب الثاني: أم مِيلاف (⭕)\n\n"
-                    f"⚡ **الدور الحالي:** {next_name}"
-                )
+                text = get_game_text(scores, game["turn"])
             
             await context.bot.edit_message_text(
                 inline_message_id=inline_message_id,
@@ -171,7 +176,7 @@ def main():
     app.add_handler(InlineQueryHandler(inline_query_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    print("XO Arena Interactive Pro is running...")
+    print("XO Arena Clean Minimalist Pro is running...")
     app.run_polling()
 
 if __name__ == '__main__':
