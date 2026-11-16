@@ -79,7 +79,7 @@ def game_text(g):
     )
 
     if not g["o"]:
-        return s + "بانتظار أم مِيلاف للانضمام 🥰"
+        return s + "بانتظار انضمام اللاعب الثاني 🥰"
 
     if g["status"] == "playing":
         p = PLAYER_X if g["turn"] == "X" else PLAYER_O
@@ -98,7 +98,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "💕 أهلاً بكم في XO ARENA 💕\n"
         "اللعبة الخاصة بأبو مِيلاف وأم مِيلاف.\n\n"
-        "استخدموا /newgame داخل مجموعتكم."
+        "استخدموا الأمر /newgame للبدء في الخاص أو في أي مجموعة."
     )
 
 
@@ -106,13 +106,14 @@ async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
 
-    if chat.type not in ("group", "supergroup"):
-        await update.message.reply_text("استخدم الأمر داخل المجموعة.")
+    # السماح باللعب في الخاص أو المجموعات
+    if chat.type not in ("private", "group", "supergroup"):
+        await update.message.reply_text("استخدم الأمر في الخاص أو داخل المجموعة.")
         return
 
     old = games.get(chat.id)
     if old and old["status"] in ("waiting", "playing"):
-        await update.message.reply_text("هناك مباراة جارية!")
+        await update.message.reply_text("هناك مباراة جارية بالفعل!")
         return
 
     g = {
@@ -129,7 +130,7 @@ async def newgame(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game_text(g),
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "💕 انضمام أم مِيلاف",
+                "💕 انضمام للعبة",
                 callback_data=f"j|{chat.id}"
             )
         ]])
@@ -207,7 +208,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         g["o"] = user
         g["status"] = "playing"
 
-        await q.answer("تم انضمام أم مِيلاف ❤️")
+        await q.answer("تم انضمام اللاعب بنجاح ❤️")
         await q.edit_message_text(
             game_text(g),
             reply_markup=keyboard(chat_id, g["board"])
@@ -295,7 +296,7 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CallbackQueryHandler(buttons))
 
-    print("XO ARENA - Abu & Um Milaf Running")
+    print("XO ARENA - Private & Group Supported")
     app.run_polling()
 
 
