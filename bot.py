@@ -207,7 +207,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         g["o"] = user
         g["status"] = "playing"
 
-        await q.answer("تم انضمام اللاعب الثاني ❤️")
+        await q.answer("تم انضمام أم مِيلاف ❤️")
         await q.edit_message_text(
             game_text(g),
             reply_markup=keyboard(chat_id, g["board"])
@@ -295,7 +295,7 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CallbackQueryHandler(buttons))
 
-    print("XO ARENA - Running without IDs restriction")
+    print("XO ARENA - Abu & Um Milaf Running")
     app.run_polling()
 
 
