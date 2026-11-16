@@ -6,6 +6,9 @@ from uuid import uuid4
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
+# تخزين حالات الألعاب النشطة للإنلاين لضمان سرعة الاستجابة والدقة
+inline_games = {}
+
 def check_winner(board):
     for i in range(3):
         if board[i][0] == board[i][1] == board[i][2] and board[i][0] != " ":
@@ -21,7 +24,7 @@ def check_winner(board):
     return None
 
 def get_fancy_board(board):
-    """تصميم واجهة فخمة وكبيرة وواضحة للمربعات"""
+    """تصميم فخم، عريض، وواضحة جداً للعين"""
     keyboard = []
     for r in range(3):
         row = []
@@ -32,7 +35,7 @@ def get_fancy_board(board):
             elif cell == "O":
                 text = "⭕ [ أم مِيلاف ]"
             else:
-                text = "▫️  اضغط هنا  ▫️"
+                text = "⬛ [ فارغ ] ⬛"
             row.append(InlineKeyboardButton(text, callback_data=f"cell_{r}_{c}"))
         keyboard.append(row)
     
@@ -41,28 +44,37 @@ def get_fancy_board(board):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "🔥 **XO ARENA - ساحة التحدي المباشر** 🔥\n\n"
-        "🎮 **طريقة اللعب مع صديقك:**\n"
+        "🔥 **XO ARENA - ساحة التحدي** 🔥\n\n"
+        "🎮 **طريقة اللعب:**\n"
         "اكتب في محادثة صديقك:\n"
-        "`@Blend_XO_Game_Bot` وحط مسافة، ثم اختر اللعبة لتظهر بينكم مباشرة!"
+        "`@Blend_XO_Game_Bot` وحط مسافة، ثم اختر اللعبة وابدؤوا التحدي!"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.inline_query
     
+    game_id = str(uuid4())
     board = [[" " for _ in range(3)] for _ in range(3)]
+    
+    # حفظ حالة اللعبة في الذاكرة لتتبعها بدقة
+    inline_games[game_id] = {
+        "board": board,
+        "turn": "X"
+    }
+    
     text = (
         "⚔️ **معركة XO ARENA الكبرى** ⚔️\n\n"
-        "🏆 النقاط: ❌ أبو مِيلاف (0) | ⭕ أم مِيلاف (0)\n\n"
+        "🏆 اللاعب الأول: أبو مِيلاف (❌)\n"
+        "🏆 اللاعب الثاني: أم مِيلاف (⭕)\n\n"
         "⚡ **الدور الحالي:** أبو مِيلاف (❌)"
     )
     
     results = [
         InlineQueryResultArticle(
-            id=str(uuid4()),
+            id=game_id,
             title="🎮 ابدأ معركة XO Arena المحدثة",
-            description="اضغط هنا لإرسال لوحة اللعب الكبيرة والواضحة مع صديقك",
+            description="اضغط هنا لإرسال لوحة اللعب الفخمة والجديدة مع صديقك",
             input_message_content=InputTextMessageContent(
                 message_text=text,
                 parse_mode="Markdown"
@@ -77,79 +89,76 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     data = query.data
-    message = query.message
     inline_message_id = query.inline_message_id
     
-    if not message and not inline_message_id:
+    if not inline_message_id:
+        # إذا كانت اللعبة مرسلة بطريقة عادية
         return
-        
-    # استخراج الأزرار الحالية من الرسالة
-    if message and message.reply_markup:
-        reply_markup = message.reply_markup
-    elif query.inline_message_id:
-        # بالنسبة للإنلاين نعتمد على محتوى الكيبورد عبر الكอลباك
-        # ولضمان قراءة اللوحة بدقة من الرسالة المحدثة:
-        pass
 
-    # سنقوم بالتعامل مع تحديث الـ Inline بمرونة تامة عبر دالة التعديل المناسبة
-    # جلب اللوحة الحالية من نص الأزرار أو تخزينها
-    if message:
-        reply_markup = message.reply_markup
-        keyboard_rows = reply_markup.inline_keyboard
-        
-        if data == "action_reset":
-            new_board = [[" " for _ in range(3)] for _ in range(3)]
-            text = "🔄 **بدأت جولة جديدة!**\n\n⚡ الدور الحالي: أبو مِيلاف (❌)"
-            if inline_message_id:
-                await context.bot.edit_message_text(inline_message_id=inline_message_id, text=text, reply_markup=get_fancy_board(new_board), parse_mode="Markdown")
-            else:
-                await query.edit_message_text(text=text, reply_markup=get_fancy_board(new_board), parse_mode="Markdown")
-            return
+    # البحث عن حالة اللعبة أو تهيئتها إن لم تكن مخزنة
+    if inline_message_id not in inline_games:
+        inline_games[inline_message_id] = {
+            "board": [[" " for _ in range(3)] for _ in range(3)],
+            "turn": "X"
+        }
+    
+    game = inline_games[inline_message_id]
+    board = game["board"]
+    current_turn = game["turn"]
 
-        if data.startswith("cell_"):
-            _, r, c = data.split("_")
-            r, c = int(r), int(c)
+    if data == "action_reset":
+        game["board"] = [[" " for _ in range(3)] for _ in range(3)]
+        game["turn"] = "X"
+        text = (
+            "🔄 **بدأت جولة جديدة!**\n\n"
+            "🏆 اللاعب الأول: أبو مِيلاف (❌)\n"
+            "🏆 اللاعب الثاني: أم مِيلاف (⭕)\n\n"
+            "⚡ **الدور الحالي:** أبو مِيلاف (❌)"
+        )
+        await context.bot.edit_message_text(
+            inline_message_id=inline_message_id,
+            text=text,
+            reply_markup=get_fancy_board(game["board"]),
+            parse_mode="Markdown"
+        )
+        return
+
+    if data.startswith("cell_"):
+        _, r, c = data.split("_")
+        r, c = int(r), int(c)
+        
+        if board[r][c] == " ":
+            board[r][c] = current_turn
+            winner = check_winner(board)
             
-            current_board = []
-            for row in keyboard_rows[:-1]:
-                board_row = []
-                for btn in row:
-                    if "أبو مِيلاف" in btn.text:
-                        board_row.append("X")
-                    elif "أم مِيلاف" in btn.text:
-                        board_row.append("O")
-                    else:
-                        board_row.append(" ")
-                current_board.append(board_row)
-                
-            if current_board[r][c] == " ":
-                x_count = sum(row.count("X") for row in current_board)
-                o_count = sum(row.count("O") for row in current_board)
-                current_turn = "X" if x_count == o_count else "O"
-                
-                current_board[r][c] = current_turn
-                winner = check_winner(current_board)
-                
-                if winner:
-                    if winner == "X":
-                        msg = "🎉 **فاز في الجولة: أبو مِيلاف (❌)!**"
-                    elif winner == "O":
-                        msg = "🎉 **فاز في الجولة: أم مِيلاف (⭕)!**"
-                    else:
-                        msg = "🤝 **تعادلت المعركة!**"
-                    text = f"🏁 **انتهت الجولة!**\n\n{msg}\n\n👇 اضغط على زر إعادة الضبط لجولة جديدة."
+            if winner:
+                if winner == "X":
+                    msg = "🎉 **فاز في الجولة: أبو مِيلاف (❌)!** 🏆"
+                elif winner == "O":
+                    msg = "🎉 **فاز في الجولة: أم مِيلاف (⭕)!** 🏆"
                 else:
-                    next_turn = "O" if current_turn == "X" else "X"
-                    next_name = "أم مِيلاف (⭕)" if next_turn == "O" else "أبو مِيلاف (❌)"
-                    text = f"⚔️ **معركة XO ARENA جارية**\n\n⚡ الدور الحالي: {next_name}"
-                    
-                new_markup = get_fancy_board(current_board)
-                if inline_message_id:
-                    await context.bot.edit_message_text(inline_message_id=inline_message_id, text=text, reply_markup=new_markup, parse_mode="Markdown")
-                else:
-                    await query.edit_message_text(text=text, reply_markup=new_markup, parse_mode="Markdown")
+                    msg = "🤝 **تعادلت المعركة! لا يوجد فائز.**"
+                
+                text = f"🏁 **انتهت الجولة!**\n\n{msg}\n\n👇 اضغط على زر إعادة الضبط لجولة جديدة."
             else:
-                await query.answer("⚠️ هذا المربع محجوز يا بطل!", show_alert=True)
+                # تبديل الدور
+                game["turn"] = "O" if current_turn == "X" else "X"
+                next_name = "أم مِيلاف (⭕)" if game["turn"] == "O" else "أبو مِيلاف (❌)"
+                text = (
+                    "⚔️ **معركة XO ARENA جارية** ⚔️\n\n"
+                    "🏆 اللاعب الأول: أبو مِيلاف (❌)\n"
+                    "🏆 اللاعب الثاني: أم مِيلاف (⭕)\n\n"
+                    f"⚡ **الدور الحالي:** {next_name}"
+                )
+            
+            await context.bot.edit_message_text(
+                inline_message_id=inline_message_id,
+                text=text,
+                reply_markup=get_fancy_board(board),
+                parse_mode="Markdown"
+            )
+        else:
+            await query.answer("⚠️ هذا المربع محجوز يا بطل، اختر مكاناً آخر!", show_alert=True)
 
 def main():
     TOKEN = os.getenv("BOT_TOKEN")
@@ -162,7 +171,7 @@ def main():
     app.add_handler(InlineQueryHandler(inline_query_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     
-    print("XO Arena Big Interface Pro is running...")
+    print("XO Arena Interactive Pro is running...")
     app.run_polling()
 
 if __name__ == '__main__':
